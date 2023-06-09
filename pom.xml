@@ -58,6 +58,11 @@
             </exclusions>
         </dependency>
         <dependency>
+            <groupId>org.json</groupId>
+            <artifactId>json</artifactId>
+            <version>20210307</version>
+        </dependency>
+        <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <version>4.13.2</version>
@@ -285,7 +290,7 @@
                         <configuration>
                             <target>
                                 <chmod dir="${dist.dir}" perm="700">
-                                    <include name="**/*.sh"/>
+                                    <include name="**/*.sh" />
                                 </chmod>
                             </target>
                         </configuration>
@@ -385,7 +390,7 @@
                                                 </goals>
                                             </pluginExecutionFilter>
                                             <action>
-                                                <ignore/>
+                                                <ignore />
                                             </action>
                                         </pluginExecution>
                                         <pluginExecution>
@@ -398,7 +403,7 @@
                                                 </goals>
                                             </pluginExecutionFilter>
                                             <action>
-                                                <ignore/>
+                                                <ignore />
                                             </action>
                                         </pluginExecution>
                                     </pluginExecutions>
@@ -452,10 +457,10 @@
                                 <phase>package</phase>
                                 <configuration>
                                     <target>
-                                        <copy file="${project.build.directory}/${project.artifactId}-${project.version}-shaded.jar" tofile="${dist.dir}/mirus.jar"/>
+                                        <copy file="${project.build.directory}/${project.artifactId}-${project.version}-shaded.jar" tofile="${dist.dir}/mirus.jar" />
                                         <!-- Grant execute permission to all shell scripts in package dir by setting it to 755 -->
                                         <chmod dir="${dist.dir}" perm="755">
-                                            <include name="**/*.sh"/>
+                                            <include name="**/*.sh" />
                                         </chmod>
                                     </target>
                                 </configuration>

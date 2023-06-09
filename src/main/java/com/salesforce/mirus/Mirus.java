@@ -10,7 +10,9 @@ package com.salesforce.mirus;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import com.salesforce.mirus.config.DistributedHerderWrapper;
 import com.salesforce.mirus.config.MirusConfig;
+import com.salesforce.mirus.config.NeedsReconfigRebalancePrinter;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URI;
@@ -68,6 +70,7 @@ public class Mirus {
   private final long initStart = time.hiResClockMs();
 
   public static void main(String[] argv) {
+    System.out.println("hello");
     Mirus.Args args = new Mirus.Args();
     JCommander jCommander =
         JCommander.newBuilder()
@@ -131,7 +134,7 @@ public class Mirus {
   }
 
   /**
-   * This method is based on the the standard Kafka Connect start logic in {@link
+   * This method is based on the standard Kafka Connect start logic in {@link
    * org.apache.kafka.connect.cli.ConnectDistributed#startConnect(Map)}, but with `clientid` prefix
    * support, to prevent JMX metric names from clashing. Also supports command-line property
    * overrides (useful for run-time port configuration), and starts the Mirus {@link
@@ -140,6 +143,8 @@ public class Mirus {
    * @param workerProps Worker Properties as a map.
    * @return Connect object.
    */
+  /////
+
   public Connect startConnect(Map<String, String> workerProps) {
     log.info("Scanning for plugin classes. This might take a moment ...");
     Plugins plugins = new Plugins(workerProps);
@@ -205,7 +210,10 @@ public class Mirus {
             advertisedUrl.toString(),
             connectorClientConfigOverridePolicy,
             sharedAdmin);
-
+    DistributedHerderWrapper herderWrapper = new DistributedHerderWrapper(herder);
+    NeedsReconfigRebalancePrinter printer = new NeedsReconfigRebalancePrinter(herderWrapper);
+    Thread printerThread = new Thread(printer);
+    printerThread.start(); ////
     // Initialize HerderStatusMonitor
     boolean autoStartTasks = mirusConfig.getTaskAutoRestart();
     boolean autoStartConnectors = mirusConfig.getConnectorAutoRestart();
@@ -215,8 +223,12 @@ public class Mirus {
             herder, workerId, pollingCycle, autoStartTasks, autoStartConnectors);
     Thread herderStatusMonitorThread = new Thread(herderStatusMonitor);
     herderStatusMonitorThread.setName("herder-status-monitor");
+    //////
 
     final Connect connect = new Connect(herder, rest);
+
+
+
     log.info("Mirus worker initialization took {}ms", time.hiResClockMs() - initStart);
     try {
       connect.start();
