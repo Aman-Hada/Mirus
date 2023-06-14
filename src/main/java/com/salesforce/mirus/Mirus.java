@@ -213,7 +213,7 @@ public class Mirus {
     DistributedHerderWrapper herderWrapper = new DistributedHerderWrapper(herder);
     NeedsReconfigRebalancePrinter printer = new NeedsReconfigRebalancePrinter(herderWrapper);
     Thread printerThread = new Thread(printer);
-    printerThread.start(); ////
+    printerThread.start(); // //
     // Initialize HerderStatusMonitor
     boolean autoStartTasks = mirusConfig.getTaskAutoRestart();
     boolean autoStartConnectors = mirusConfig.getConnectorAutoRestart();
@@ -226,8 +226,6 @@ public class Mirus {
     //////
 
     final Connect connect = new Connect(herder, rest);
-
-
 
     log.info("Mirus worker initialization took {}ms", time.hiResClockMs() - initStart);
     try {
