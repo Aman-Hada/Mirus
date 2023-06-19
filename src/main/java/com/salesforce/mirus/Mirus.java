@@ -10,9 +10,8 @@ package com.salesforce.mirus;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import com.salesforce.mirus.config.DistributedHerderWrapper;
 import com.salesforce.mirus.config.MirusConfig;
-import com.salesforce.mirus.config.NeedsReconfigRebalancePrinter;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URI;
@@ -70,7 +69,6 @@ public class Mirus {
   private final long initStart = time.hiResClockMs();
 
   public static void main(String[] argv) {
-    System.out.println("hello");
     Mirus.Args args = new Mirus.Args();
     JCommander jCommander =
         JCommander.newBuilder()
@@ -210,10 +208,6 @@ public class Mirus {
             advertisedUrl.toString(),
             connectorClientConfigOverridePolicy,
             sharedAdmin);
-    DistributedHerderWrapper herderWrapper = new DistributedHerderWrapper(herder);
-    NeedsReconfigRebalancePrinter printer = new NeedsReconfigRebalancePrinter(herderWrapper);
-    Thread printerThread = new Thread(printer);
-    printerThread.start(); // //
     // Initialize HerderStatusMonitor
     boolean autoStartTasks = mirusConfig.getTaskAutoRestart();
     boolean autoStartConnectors = mirusConfig.getConnectorAutoRestart();

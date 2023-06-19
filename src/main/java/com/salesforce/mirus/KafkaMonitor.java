@@ -10,12 +10,6 @@ package com.salesforce.mirus;
 
 import com.salesforce.mirus.config.SourceConfig;
 import com.salesforce.mirus.metrics.MissingPartitionsJmxReporter;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -36,8 +30,6 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.transforms.RegexRouter;
 import org.apache.kafka.connect.transforms.Transformation;
-import org.json.JSONArray;
-import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,7 +68,7 @@ class KafkaMonitor implements Runnable {
   // The current list of partitions to replicate.
   private volatile List<TopicPartition> topicPartitionList;
 
-  private volatile boolean rebalanceInProgress = false;
+  public String connectorName;
 
   KafkaMonitor(ConnectorContext context, SourceConfig config, TaskConfigBuilder taskConfigBuilder) {
     this(
@@ -112,6 +104,7 @@ class KafkaMonitor implements Runnable {
             : SourcePartitionValidator.MatchingStrategy.TOPIC;
     this.topicCheckingEnabled = config.getTopicCheckingEnabled();
     this.routers = this.validateTransformations(config.transformations());
+    this.connectorName = config.getName();
   }
 
   private List<Transformation<SourceRecord>> validateTransformations(
@@ -200,139 +193,52 @@ class KafkaMonitor implements Runnable {
   @Override
   public void run() {
     final int[] consecutiveRetriableErrors = {0};
-    Thread loop1 =
-        new Thread(
-            () -> {
-              while (true) {
-                String connectorStatus =
-                    getConnectorStatus(
-                        "http://localhost:8083/connectors/mirus-quickstart-source/status");
-                // System.out.println("Connector status: " + connectorStatus);
-                LocalDateTime currentTime = LocalDateTime.now();
-                System.out.println("Current time: " + currentTime);
-                List<String> taskStates = getTaskStates(connectorStatus);
-                System.out.println("Task states: " + taskStates);
-                System.out.println("partition rebalance states: " + rebalanceInProgress);
-                System.out.println(
-                    "overall rebalance status : "
-                        + rebalanceDetector(taskStates, rebalanceInProgress));
-                try {
-                  Thread.sleep(500); // 0.5 second buffer time
-                } catch (InterruptedException e) {
-                  // Handle interruption if needed
-                  System.out.println("some problem detected");
-                }
-              }
-            });
 
-    Thread loop2 =
-        new Thread(
-            () -> {
-              while (true) {
-                try {
-                  // Do a fast shutdown check first thing in case we're in an exponential backoff
-                  // retry loop,
-                  // which will never hit the poll wait below
-                  if (shutDownLatch.await(0, TimeUnit.MILLISECONDS)) {
-                    logger.debug("Exiting KafkaMonitor");
-                    return;
-                  }
-                  if (this.topicPartitionList == null) {
-                    // Need to initialize here to prevent the constructor hanging on startup if the
-                    // source cluster is unavailable.
-                    this.topicPartitionList = fetchTopicPartitionList();
-                  }
+    while (true) {
+      try {
+        // Do a fast shutdown check first thing in case we're in an exponential backoff
+        // retry loop,
+        // which will never hit the poll wait below
+        if (shutDownLatch.await(0, TimeUnit.MILLISECONDS)) {
+          logger.debug("Exiting KafkaMonitor");
+          return;
+        }
+        if (this.topicPartitionList == null) {
+          // Need to initialize here to prevent the constructor hanging on startup if the
+          // source cluster is unavailable.
+          this.topicPartitionList = fetchTopicPartitionList();
+        }
 
-                  if (partitionsChanged()) {
-                    System.out.println("rebalance partition change-aman");
-                    logger.info(
-                        "Source partition change detected.  Requesting task reconfiguration.");
-                    this.context.requestTaskReconfiguration();
-                  }
+        if (partitionsChanged()) {
+          logger.info("Source partition change detected.  Requesting task reconfiguration.");
+          this.context.requestTaskReconfiguration();
+        }
 
-                  if (shutDownLatch.await(monitorPollWaitMs, TimeUnit.MILLISECONDS)) {
-                    logger.debug("Exiting KafkaMonitor");
-                    return;
-                  }
-                  consecutiveRetriableErrors[0] = 0;
-                } catch (WakeupException | InterruptedException e) {
-                  // Assume we've been woken or interrupted to shutdown, so continue on to checking
-                  // the
-                  // shutDownLatch next iteration.
-                  logger.debug("KafkaMonitor woken up, checking if shutdown requested...");
-                } catch (RetriableException e) {
-                  consecutiveRetriableErrors[0] += 1;
-                  logger.warn(
-                      "Retriable exception encountered ({} consecutive), continuing processing...",
-                      consecutiveRetriableErrors[0],
-                      e);
-                  exponentialBackoffWait(consecutiveRetriableErrors[0]);
-                } catch (Exception e) {
-                  logger.error("Raising exception to connect runtime", e);
-                  context.raiseError(e);
-                }
-              }
-            });
-
-    loop1.start();
-    loop2.start();
+        if (shutDownLatch.await(monitorPollWaitMs, TimeUnit.MILLISECONDS)) {
+          logger.debug("Exiting KafkaMonitor");
+          return;
+        }
+        consecutiveRetriableErrors[0] = 0;
+      } catch (WakeupException | InterruptedException e) {
+        // Assume we've been woken or interrupted to shutdown, so continue on to checking
+        // the
+        // shutDownLatch next iteration.
+        logger.debug("KafkaMonitor woken up, checking if shutdown requested...");
+      } catch (RetriableException e) {
+        consecutiveRetriableErrors[0] += 1;
+        logger.warn(
+            "Retriable exception encountered ({} consecutive), continuing processing...",
+            consecutiveRetriableErrors[0],
+            e);
+        exponentialBackoffWait(consecutiveRetriableErrors[0]);
+      } catch (Exception e) {
+        logger.error("Raising exception to connect runtime", e);
+        context.raiseError(e);
+      }
+    }
   }
   //// changed code
 
-  private String rebalanceDetector(List<String> taskStates, boolean rebalanceInProgress) {
-    boolean flag1 = false;
-    for (String state : taskStates) {
-      if (!state.equals("RUNNING")) {
-        flag1 = true;
-        break;
-      }
-    }
-    if (rebalanceInProgress == true) {
-      flag1 = true;
-    }
-    if (flag1 == true) return "rebalance happening";
-    else return "rebalance not happening";
-  }
-
-  private String getConnectorStatus(String url) {
-    try {
-      URL apiUrl = new URL(url);
-      HttpURLConnection connection = (HttpURLConnection) apiUrl.openConnection();
-      connection.setRequestMethod("GET");
-
-      int responseCode = connection.getResponseCode();
-      if (responseCode == HttpURLConnection.HTTP_OK) {
-        BufferedReader reader =
-            new BufferedReader(new InputStreamReader(connection.getInputStream()));
-        StringBuilder response = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-          response.append(line);
-        }
-        reader.close();
-        return response.toString();
-      } else {
-        System.out.println("Error response code: " + responseCode);
-      }
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
-    return null;
-  }
-
-  private List<String> getTaskStates(String connectorStatus) {
-    List<String> taskStates = new ArrayList<>();
-    if (connectorStatus != null) {
-      JSONObject statusJson = new JSONObject(connectorStatus);
-      JSONArray tasksJson = statusJson.getJSONArray("tasks");
-      for (int i = 0; i < tasksJson.length(); i++) {
-        JSONObject taskJson = tasksJson.getJSONObject(i);
-        String state = taskJson.getString("state");
-        taskStates.add(state);
-      }
-    }
-    return taskStates;
-  }
   //// end
   private void exponentialBackoffWait(int numErrors) {
     int secondsToWait =
@@ -360,14 +266,10 @@ class KafkaMonitor implements Runnable {
     // Note: These two lists are already sorted
     boolean partitionsChanged = !topicPartitionList.equals(oldPartitionInfoList);
     if (partitionsChanged) {
-      rebalanceInProgress = true;
-      System.out.println("rebalanceInProgress is true");
       logger.debug(
           "Replicated partition set change. Triggering re-balance with {} partitions",
           topicPartitionList.size());
     } else {
-      rebalanceInProgress = false;
-      System.out.println("rebalanceInProgress is false");
       logger.debug("No change to replicated partition set");
     }
     return partitionsChanged;
@@ -398,16 +300,15 @@ class KafkaMonitor implements Runnable {
     synchronized (sourceConsumer) {
       sourcePartitionList = fetchMatchingPartitions(sourceConsumer);
     }
-
     List<TopicPartition> result;
     if (this.topicCheckingEnabled) {
       result = getDestinationAvailablePartitions(sourcePartitionList);
     } else {
       result = sourcePartitionList;
     }
-
     // Sort the result for order-independent comparison
     result.sort(Comparator.comparing(tp -> tp.topic() + tp.partition()));
+    KafkaMonitorMetrics.updateConnectorPartitions(connectorName, result.size());
     return result;
   }
 
@@ -479,6 +380,7 @@ class KafkaMonitor implements Runnable {
     shutDownLatch.countDown();
     sourceConsumer.wakeup();
     destinationConsumer.wakeup();
+    KafkaMonitorMetrics.removeConnector(connectorName);
     synchronized (sourceConsumer) {
       sourceConsumer.close();
     }
