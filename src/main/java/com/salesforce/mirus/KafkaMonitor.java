@@ -195,7 +195,6 @@ class KafkaMonitor implements Runnable {
     while (true) {
       try {
         // Do a fast shutdown check first thing in case we're in an exponential backoff retry loop,
-
         // which will never hit the poll wait below
         if (shutDownLatch.await(0, TimeUnit.MILLISECONDS)) {
           logger.debug("Exiting KafkaMonitor");
@@ -216,7 +215,6 @@ class KafkaMonitor implements Runnable {
           logger.debug("Exiting KafkaMonitor");
           return;
         }
-
         consecutiveRetriableErrors = 0;
       } catch (WakeupException | InterruptedException e) {
         // Assume we've been woken or interrupted to shutdown, so continue on to checking the
@@ -229,7 +227,6 @@ class KafkaMonitor implements Runnable {
             consecutiveRetriableErrors,
             e);
         exponentialBackoffWait(consecutiveRetriableErrors);
-
       } catch (Exception e) {
         logger.error("Raising exception to connect runtime", e);
         context.raiseError(e);
@@ -297,12 +294,14 @@ class KafkaMonitor implements Runnable {
     synchronized (sourceConsumer) {
       sourcePartitionList = fetchMatchingPartitions(sourceConsumer);
     }
+
     List<TopicPartition> result;
     if (this.topicCheckingEnabled) {
       result = getDestinationAvailablePartitions(sourcePartitionList);
     } else {
       result = sourcePartitionList;
     }
+
     // Sort the result for order-independent comparison
     result.sort(Comparator.comparing(tp -> tp.topic() + tp.partition()));
     KafkaMonitorMetrics.updateConnectorPartitions(connectorName, result.size());

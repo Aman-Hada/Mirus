@@ -101,6 +101,7 @@ public class MirusSourceTask extends SourceTask {
 
   @Override
   public void start(Map<String, String> properties) {
+
     logger.debug("Task starting with properties: {}", properties);
     Thread.currentThread().setName("MirusSourceTask");
 

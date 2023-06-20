@@ -38,7 +38,6 @@ public class MirusSourceConnector extends SourceConnector {
   private final String version;
   private Thread kafkaMonitorThread;
   private KafkaMonitor kafkaMonitor;
-  private KafkaMonitorMetrics monitorMetrics;
 
   @SuppressWarnings("WeakerAccess")
   public MirusSourceConnector() {
@@ -66,8 +65,6 @@ public class MirusSourceConnector extends SourceConnector {
       TaskConfigBuilder taskConfigBuilder =
           new TaskConfigBuilder(new RoundRobinTaskAssignor(), config);
       start(new KafkaMonitor(context, config, taskConfigBuilder));
-      monitorMetrics = new KafkaMonitorMetrics(); // Instantiate the MonitorMetrics class
-
     } catch (Exception e) {
       logger.error("Unable to start KafkaMonitor", e);
       context.raiseError(e);
