@@ -101,7 +101,7 @@ public class MirusSourceTask extends SourceTask {
 
   @Override
   public void start(Map<String, String> properties) {
-    System.out.println("task is started");
+
     logger.debug("Task starting with properties: {}", properties);
     Thread.currentThread().setName("MirusSourceTask");
 
@@ -127,8 +127,6 @@ public class MirusSourceTask extends SourceTask {
     this.mirrorJmxReporter.addTopics(topicPartitionList);
 
     logger.debug("Task starting with partitions: {}", config.getInternalTaskPartitions());
-    List<String> topics =
-        topicPartitionList.stream().map(TopicPartition::topic).collect(Collectors.toList());
 
     this.consumer = consumerFactory.newConsumer(consumerProperties);
     this.consumer.assign(topicPartitionList);

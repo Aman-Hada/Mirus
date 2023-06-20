@@ -21,12 +21,14 @@ import com.salesforce.mirus.config.SourceConfig;
 import com.salesforce.mirus.config.SourceConfigDefinition;
 import com.salesforce.mirus.config.TaskConfig;
 import com.salesforce.mirus.config.TaskConfigDefinition;
+import java.lang.Thread.State;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -397,21 +399,21 @@ public class KafkaMonitorTest {
           }
         };
 
-    //    kafkaMonitor =
-    //        new KafkaMonitor(
-    //            mock(ConnectorContext.class),
-    //            config,
-    //            consumer,
-    //            mockDestinationConsumer,
-    //            taskConfigBuilder);
-    //    Thread monitorThread = new Thread(kafkaMonitor);
-    //    monitorThread.start();
-    //    exceptionThrownLatch.await(2, TimeUnit.SECONDS);
-    //    monitorThread.join(1);
-    //
-    //    assertThat(monitorThread.getState(), not(State.TERMINATED));
-    //    kafkaMonitor.stop();
-    //    monitorThread.interrupt();
-    //    monitorThread.join(5000);
+    kafkaMonitor =
+        new KafkaMonitor(
+            mock(ConnectorContext.class),
+            config,
+            consumer,
+            mockDestinationConsumer,
+            taskConfigBuilder);
+    Thread monitorThread = new Thread(kafkaMonitor);
+    monitorThread.start();
+    exceptionThrownLatch.await(2, TimeUnit.SECONDS);
+    monitorThread.join(1);
+
+    assertThat(monitorThread.getState(), not(State.TERMINATED));
+    kafkaMonitor.stop();
+    monitorThread.interrupt();
+    monitorThread.join(5000);
   }
 }
