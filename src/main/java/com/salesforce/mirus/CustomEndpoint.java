@@ -13,6 +13,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.core.Response;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,66 +54,63 @@ public class CustomEndpoint {
     return null;
   }
 
+
   private List<String> getTaskStates(String connectorStatus) {
     List<String> taskStates = new ArrayList<>();
     if (connectorStatus != null) {
-      JSONObject statusJson = new JSONObject(connectorStatus);
-      JSONArray tasksJson = statusJson.getJSONArray("tasks");
-      for (int i = 0; i < tasksJson.length(); i++) {
-        JSONObject taskJson = tasksJson.getJSONObject(i);
-        String state = taskJson.getString("state");
-        taskStates.add(state);
+      try {
+        JSONObject statusJson = new JSONObject(connectorStatus);
+        JSONArray tasksJson = statusJson.getJSONArray("tasks");
+        for (int i = 0; i < tasksJson.length(); i++) {
+          JSONObject taskJson = tasksJson.getJSONObject(i);
+          String state = taskJson.getString("state");
+          taskStates.add(state);
+        }
+      } catch (JSONException e) {
+        e.printStackTrace();
+      } catch (Exception e) {
+        e.printStackTrace();
       }
     }
     return taskStates;
   }
 
+
   private String rebalanceDetector(List<String> taskStates, String connnector) {
     Map<String, Integer> connectorpartitions = KafkaMonitorMetrics.getConnectorPartitionMap();
     Integer partitions = connectorpartitions.get(connnector);
-    System.out.println(
-        "the connector and no. of partitions assigned to it are : "
-            + connnector
-            + " "
-            + partitions);
-    boolean flag1 = false;
+
+    boolean allRunning = true;
+    int runningTasksCount = 0;
     for (String state : taskStates) {
       if (!state.equals("RUNNING")) {
-        flag1 = true;
-        break;
+        allRunning = false;
       }
+      else runningTasksCount++;
     }
-    if (flag1) {
-      // Rebalance happening if the number of task states is greater than the number of partitions
-      // assigned to the connector
-      if (taskStates.size() > partitions) {
-        // Check if the number of running status tasks is equal to the number of partitions
-        int runningTasksCount = 0;
-        for (String state : taskStates) {
-          if (state.equals("RUNNING")) {
-            runningTasksCount++;
-          }
-        }
-        if (runningTasksCount == partitions) {
-          return "rebalance not happening";
-        } else {
-          return "rebalance happening";
-        }
-      } else {
-        return "rebalance happening";
-      }
-    } else {
+    //if tasks are greater than assigned partitions to a connector.
+    //rebalance doesn't happen when active tasks are equal to partitions assigned.
+    if (allRunning || ((taskStates.size() > partitions) && (runningTasksCount == partitions))) {
       return "rebalance not happening";
+    }
+    else {
+      return "rebalance happening";
     }
   }
 
   @GET
   public Response myEndpoint(@PathParam("connector") String url) {
+    try {
+      String connectorStatus = getConnectorStatus(url);
+      List<String> taskStates = getTaskStates(connectorStatus);
+      String response = rebalanceDetector(taskStates, url);
 
-    String connectorStatus = getConnectorStatus(url);
-    List<String> taskStates = getTaskStates(connectorStatus);
-    String response = rebalanceDetector(taskStates, url);
-
-    return Response.ok("Custom endpoint response :" + response).build();
+      return Response.ok("Custom endpoint response: " + response).build();
+    } catch (Exception e) {
+      e.printStackTrace();
+      String errorMessage = "An error occurred while processing the request.";
+      return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+              .entity(errorMessage).build();
+    }
   }
 }
