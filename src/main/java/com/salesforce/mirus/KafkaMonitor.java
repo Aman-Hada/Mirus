@@ -67,6 +67,7 @@ class KafkaMonitor implements Runnable {
 
   // The current list of partitions to replicate.
   private volatile List<TopicPartition> topicPartitionList;
+  public String connectorName;
 
   KafkaMonitor(ConnectorContext context, SourceConfig config, TaskConfigBuilder taskConfigBuilder) {
     this(
@@ -102,6 +103,7 @@ class KafkaMonitor implements Runnable {
             : SourcePartitionValidator.MatchingStrategy.TOPIC;
     this.topicCheckingEnabled = config.getTopicCheckingEnabled();
     this.routers = this.validateTransformations(config.transformations());
+    this.connectorName = config.getName();
   }
 
   private List<Transformation<SourceRecord>> validateTransformations(
@@ -193,6 +195,7 @@ class KafkaMonitor implements Runnable {
     while (true) {
       try {
         // Do a fast shutdown check first thing in case we're in an exponential backoff retry loop,
+
         // which will never hit the poll wait below
         if (shutDownLatch.await(0, TimeUnit.MILLISECONDS)) {
           logger.debug("Exiting KafkaMonitor");
@@ -213,6 +216,7 @@ class KafkaMonitor implements Runnable {
           logger.debug("Exiting KafkaMonitor");
           return;
         }
+
         consecutiveRetriableErrors = 0;
       } catch (WakeupException | InterruptedException e) {
         // Assume we've been woken or interrupted to shutdown, so continue on to checking the
@@ -225,6 +229,7 @@ class KafkaMonitor implements Runnable {
             consecutiveRetriableErrors,
             e);
         exponentialBackoffWait(consecutiveRetriableErrors);
+
       } catch (Exception e) {
         logger.error("Raising exception to connect runtime", e);
         context.raiseError(e);
@@ -292,16 +297,15 @@ class KafkaMonitor implements Runnable {
     synchronized (sourceConsumer) {
       sourcePartitionList = fetchMatchingPartitions(sourceConsumer);
     }
-
     List<TopicPartition> result;
     if (this.topicCheckingEnabled) {
       result = getDestinationAvailablePartitions(sourcePartitionList);
     } else {
       result = sourcePartitionList;
     }
-
     // Sort the result for order-independent comparison
     result.sort(Comparator.comparing(tp -> tp.topic() + tp.partition()));
+    KafkaMonitorMetrics.updateConnectorPartitions(connectorName, result.size());
     return result;
   }
 
@@ -373,6 +377,7 @@ class KafkaMonitor implements Runnable {
     shutDownLatch.countDown();
     sourceConsumer.wakeup();
     destinationConsumer.wakeup();
+    KafkaMonitorMetrics.removeConnector(connectorName);
     synchronized (sourceConsumer) {
       sourceConsumer.close();
     }

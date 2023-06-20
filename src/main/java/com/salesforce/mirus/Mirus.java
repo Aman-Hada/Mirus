@@ -205,7 +205,6 @@ public class Mirus {
             advertisedUrl.toString(),
             connectorClientConfigOverridePolicy,
             sharedAdmin);
-
     // Initialize HerderStatusMonitor
     boolean autoStartTasks = mirusConfig.getTaskAutoRestart();
     boolean autoStartConnectors = mirusConfig.getConnectorAutoRestart();
