@@ -76,7 +76,9 @@ public class CustomEndpoint {
   private String rebalanceDetector(List<String> taskStates, String connnector) {
     Map<String, Integer> connectorpartitions = KafkaMonitorMetrics.getConnectorPartitionMap();
     Integer partitions = connectorpartitions.get(connnector);
-
+    if (connectorpartitions == null || partitions == null) {
+      throw new NullPointerException("Null pointer exception occurred");
+    }
     boolean allRunning = true;
     int runningTasksCount = 0;
     for (String state : taskStates) {
@@ -101,7 +103,7 @@ public class CustomEndpoint {
       String response = rebalanceDetector(taskStates, url);
 
       return Response.ok("Custom endpoint response: " + response).build();
-    } catch (Exception e) {
+    } catch (NullPointerException e) {
       e.printStackTrace();
       String errorMessage = "An error occurred while processing the request.";
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(errorMessage).build();
