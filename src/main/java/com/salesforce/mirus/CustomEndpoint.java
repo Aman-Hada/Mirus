@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
@@ -12,7 +13,6 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.core.Response;
-
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -30,65 +30,65 @@ public class CustomEndpoint {
 
   @GET
   @Path("/{connector}/rebalancestatus")
-  public Response healthEndpoint(@PathParam("connector") String url) {
+  public Response healthEndpoint(@PathParam("connector") String connectorName) {
     try {
-      String connectorStatus = getConnectorStatus(url);
+      String connectorStatus = getConnectorStatus(connectorName);
       List<String> taskStates = getTaskStates(connectorStatus);
-      boolean response = rebalanceDetector(taskStates, url);
+      boolean response = rebalanceDetector(taskStates, connectorName);
       return Response.ok(response).build();
     } catch (NullPointerException e) {
-      logger.error("NullPointerException ", e.getMessage());
+      logger.error("NullPointerException ", e);
       String errorMessage = "An error occurred while processing the request.";
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(errorMessage).build();
-    } catch (IOException e){
-      logger.error("IOException ", e.getMessage());
+    } catch (IOException e) {
+      logger.error("IOException ", e);
       String errorMessage = "An error occurred while processing the request.";
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(errorMessage).build();
-    } catch (JSONException e){
-      logger.error("JSONException", e.getMessage());
-      String errorMessage = "An error occurred while processing JSON data.";
+    } catch (JSONException e) {
+      logger.error("Json exception ", e.getMessage());
+      String errorMessage = "An error occurred while processing the request.";
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(errorMessage).build();
     }
   }
 
-  private String getConnectorStatus(String url) throws IOException {
-
-    URL apiUrl = new URL(url);
+  private String getConnectorStatus(String connectorName) throws IOException {
+    String urlString = "http://localhost:8083/connectors/" + connectorName + "/status";
+    URL apiUrl = new URL(urlString);
     HttpURLConnection connection = (HttpURLConnection) apiUrl.openConnection();
     connection.setRequestMethod("GET");
 
     int responseCode = connection.getResponseCode();
     if (responseCode == HttpURLConnection.HTTP_OK) {
-      try (BufferedReader reader =
-                   new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
-        StringBuilder response = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-          response.append(line);
-        }
-        return response.toString();
+      BufferedReader reader =
+          new BufferedReader(new InputStreamReader(connection.getInputStream()));
+      StringBuilder response = new StringBuilder();
+      String line;
+      while ((line = reader.readLine()) != null) {
+        response.append(line);
       }
-    } else {
-      logger.error("Error response code: " + responseCode);
+      reader.close();
+      return response.toString();
     }
+
     return null;
   }
 
   private List<String> getTaskStates(String connectorStatus) throws JSONException {
     List<String> taskStates = new ArrayList<>();
     if (connectorStatus != null) {
-        JSONObject statusJson = new JSONObject(connectorStatus);
-        JSONArray tasksJson = statusJson.getJSONArray("tasks");
-        for (int i = 0; i < tasksJson.length(); i++) {
-          JSONObject taskJson = tasksJson.getJSONObject(i);
-          String state = taskJson.getString("state");
-          taskStates.add(state);
-        }
+      JSONObject statusJson = new JSONObject(connectorStatus);
+      JSONArray tasksJson = statusJson.getJSONArray("tasks");
+      for (int i = 0; i < tasksJson.length(); i++) {
+        JSONObject taskJson = tasksJson.getJSONObject(i);
+        String state = taskJson.getString("state");
+        taskStates.add(state);
+      }
     }
     return taskStates;
   }
 
-  private boolean rebalanceDetector(List<String> taskStates, String connnector) throws NullPointerException {
+  private boolean rebalanceDetector(List<String> taskStates, String connnector)
+      throws NullPointerException {
     Map<String, Integer> connectorpartitions = KafkaMonitorMetrics.getConnectorPartitionMap();
     Integer partitions = connectorpartitions.get(connnector);
     boolean allRunning = true;
@@ -106,5 +106,4 @@ public class CustomEndpoint {
       return false;
     }
   }
-
 }
