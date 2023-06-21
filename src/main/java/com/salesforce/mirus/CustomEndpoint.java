@@ -101,9 +101,9 @@ public class CustomEndpoint {
     // if tasks are greater than assigned partitions to a connector.
     // rebalance doesn't happen when active tasks are equal to partitions assigned.
     if (allRunning || ((taskStates.size() > partitions) && (runningTasksCount == partitions))) {
-      return true;
-    } else {
       return false;
+    } else {
+      return true;
     }
   }
 }
