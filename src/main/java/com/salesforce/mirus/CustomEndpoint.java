@@ -41,11 +41,11 @@ public class CustomEndpoint {
       String errorMessage = "An error occurred while processing the request.";
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(errorMessage).build();
     } catch (IOException e){
-      logger.error("IOException ", e);
+      logger.error("IOException ", e.getMessage());
       String errorMessage = "An error occurred while processing the request.";
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(errorMessage).build();
     } catch (JSONException e){
-      logger.error("JSONException", e);
+      logger.error("JSONException", e.getMessage());
       String errorMessage = "An error occurred while processing JSON data.";
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(errorMessage).build();
     }
