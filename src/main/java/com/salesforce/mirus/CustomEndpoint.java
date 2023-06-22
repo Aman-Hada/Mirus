@@ -29,6 +29,8 @@ import org.slf4j.LoggerFactory;
 public class CustomEndpoint {
   private final Map<String, ?> configs;
   private static final Logger logger = LoggerFactory.getLogger(CustomEndpoint.class);
+  private final String hostname;
+  private final int port;
 
   /**
    * Constructs a CustomEndpoint object with the provided configuration.
@@ -37,6 +39,8 @@ public class CustomEndpoint {
    */
   public CustomEndpoint(Map<String, ?> configs) {
     this.configs = configs;
+    this.hostname = System.getenv("HOST");
+    this.port = Integer.parseInt(System.getenv("PORT"));
   }
 
   /**
@@ -50,7 +54,7 @@ public class CustomEndpoint {
   @Path("/{connector}/rebalanceStatus")
   public Response rebalanceEndpoint(@PathParam("connector") String connectorName) {
     try {
-      String connectorStatus = getConnectorStatusFromRestAPI(connectorName);
+      String connectorStatus = getConnectorStatusFromRestAPI(connectorName, hostname, port);
       if (connectorStatus == null)
         return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
       List<String> taskStates = parseJsonResponse(connectorStatus);
@@ -78,8 +82,8 @@ public class CustomEndpoint {
    * @return The connector status as a string.
    * @throws IOException If an I/O error occurs while connecting to the REST API.
    */
-  private String getConnectorStatusFromRestAPI(String connectorName) throws IOException {
-    String urlString = "http://localhost:8083/connectors/" + connectorName + "/status";
+  private String getConnectorStatusFromRestAPI(String connectorName, String hostname, int port) throws IOException {
+    String urlString = "http://" + hostname + ":" + port + "/connectors/" + connectorName + "/status";
     URL apiUrl = new URL(urlString);
     HttpURLConnection connection = (HttpURLConnection) apiUrl.openConnection();
     connection.setRequestMethod("GET");
