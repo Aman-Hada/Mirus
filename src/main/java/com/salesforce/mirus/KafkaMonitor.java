@@ -304,7 +304,9 @@ class KafkaMonitor implements Runnable {
 
     // Sort the result for order-independent comparison
     result.sort(Comparator.comparing(tp -> tp.topic() + tp.partition()));
-    ConnectorPartitionsResource.updateConnectorPartitionMap(connectorName, result.size());
+    if (connectorName != null && result != null && ConnectorPartitionsResource.getConnectorPartitionMap() != null) {
+      ConnectorPartitionsResource.updateConnectorPartitionMap(connectorName, result.size());
+    }
     return result;
   }
 
@@ -376,7 +378,9 @@ class KafkaMonitor implements Runnable {
     shutDownLatch.countDown();
     sourceConsumer.wakeup();
     destinationConsumer.wakeup();
-    ConnectorPartitionsResource.removeConnector(connectorName);
+    if (connectorName != null && ConnectorPartitionsResource.getConnectorPartitionMap()!=null) {
+      ConnectorPartitionsResource.removeConnector(connectorName);
+    }
     synchronized (sourceConsumer) {
       sourceConsumer.close();
     }

@@ -149,8 +149,8 @@ public class CustomEndpoint {
     // rebalance doesn't happen when active tasks are equal to partitions assigned.
     if (allRunning || ((taskStates.size() > partitions) && (runningTasksCount == partitions))) {
       return false;
-    } else {
-      return true;
     }
+    return true;
+
   }
 }
