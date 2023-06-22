@@ -4,7 +4,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,39 +18,67 @@ import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * CustomEndpoint is a RESTful endpoint class that provides a rebalance check endpoint to determine
+ * if a connector is currently undergoing a rebalance or not.
+ *
+ * <p>We are only concerned with worker level rebalances in source connector, so we call the status
+ * endpoint provided by Kafka Connect API to determine rebalance status.
+ */
 @Path("/connectors")
 public class CustomEndpoint {
   private final Map<String, ?> configs;
   private static final Logger logger = LoggerFactory.getLogger(CustomEndpoint.class);
 
+  /**
+   * Constructs a CustomEndpoint object with the provided configuration.
+   *
+   * @param configs The configuration for the endpoint.
+   */
   public CustomEndpoint(Map<String, ?> configs) {
     this.configs = configs;
   }
 
+  /**
+   * Rebalance endpoint to check if a connector is rebalancing.
+   *
+   * @param connectorName The name of the connector.
+   * @return A response indicating whether the connector is currently undergoing a rebalance. It
+   *     returns {@code true} if a rebalance is happening and {@code false} otherwise.
+   */
   @GET
-  @Path("/{connector}/rebalancestatus")
-  public Response healthEndpoint(@PathParam("connector") String connectorName) {
+  @Path("/{connector}/rebalanceStatus")
+  public Response rebalanceEndpoint(@PathParam("connector") String connectorName) {
     try {
-      String connectorStatus = getConnectorStatus(connectorName);
-      List<String> taskStates = getTaskStates(connectorStatus);
-      boolean response = rebalanceDetector(taskStates, connectorName);
+      String connectorStatus = getConnectorStatusFromRestAPI(connectorName);
+      if (connectorStatus == null)
+        return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
+      List<String> taskStates = parseJsonResponse(connectorStatus);
+      boolean response = isRebalancing(taskStates, connectorName);
       return Response.ok(response).build();
     } catch (NullPointerException e) {
-      logger.error("NullPointerException ", e);
-      String errorMessage = "An error occurred while processing the request.";
+      logger.error("NullPointerException ", e.getMessage());
+      String errorMessage = "Null pointer exception occurred while processing the request.";
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(errorMessage).build();
     } catch (IOException e) {
-      logger.error("IOException ", e);
-      String errorMessage = "An error occurred while processing the request.";
+      logger.error("IOException ", e.getMessage());
+      String errorMessage = "IO exception occurred while processing the request.";
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(errorMessage).build();
     } catch (JSONException e) {
       logger.error("Json exception ", e.getMessage());
-      String errorMessage = "An error occurred while processing the request.";
+      String errorMessage = "Json exception occurred while processing the request.";
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(errorMessage).build();
     }
   }
 
-  private String getConnectorStatus(String connectorName) throws IOException {
+  /**
+   * Retrieves the connector status from a REST API endpoint.
+   *
+   * @param connectorName The name of the connector.
+   * @return The connector status as a string.
+   * @throws IOException If an I/O error occurs while connecting to the REST API.
+   */
+  private String getConnectorStatusFromRestAPI(String connectorName) throws IOException {
     String urlString = "http://localhost:8083/connectors/" + connectorName + "/status";
     URL apiUrl = new URL(urlString);
     HttpURLConnection connection = (HttpURLConnection) apiUrl.openConnection();
@@ -73,7 +100,14 @@ public class CustomEndpoint {
     return null;
   }
 
-  private List<String> getTaskStates(String connectorStatus) throws JSONException {
+  /**
+   * Parses the connector status JSON response and extracts the task states.
+   *
+   * @param connectorStatus The connector status as a JSON string.
+   * @return A list of task states.
+   * @throws JSONException If an error occurs while parsing the JSON response.
+   */
+  private List<String> parseJsonResponse(String connectorStatus) throws JSONException {
     List<String> taskStates = new ArrayList<>();
     if (connectorStatus != null) {
       JSONObject statusJson = new JSONObject(connectorStatus);
@@ -87,10 +121,19 @@ public class CustomEndpoint {
     return taskStates;
   }
 
-  private boolean rebalanceDetector(List<String> taskStates, String connnector)
+  /**
+   * Checks if the connector is rebalancing its tasks.
+   *
+   * @param taskStates The list of task states.
+   * @param connectorName The name of the connector.
+   * @return {@code true} if the connector is rebalancing, {@code false} otherwise.
+   * @throws NullPointerException If a null value is encountered while processing the tasks.
+   */
+  private boolean isRebalancing(List<String> taskStates, String connectorName)
       throws NullPointerException {
-    Map<String, Integer> connectorpartitions = KafkaMonitorMetrics.getConnectorPartitionMap();
-    Integer partitions = connectorpartitions.get(connnector);
+    Map<String, Integer> connectorPartitions =
+        ConnectorPartitionsResource.getConnectorPartitionMap();
+    Integer partitions = connectorPartitions.get(connectorName);
     boolean allRunning = true;
     int runningTasksCount = 0;
     for (String state : taskStates) {
