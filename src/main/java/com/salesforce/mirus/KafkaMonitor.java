@@ -67,6 +67,7 @@ class KafkaMonitor implements Runnable {
 
   // The current list of partitions to replicate.
   private volatile List<TopicPartition> topicPartitionList;
+  public String connectorName;
 
   KafkaMonitor(ConnectorContext context, SourceConfig config, TaskConfigBuilder taskConfigBuilder) {
     this(
@@ -102,6 +103,7 @@ class KafkaMonitor implements Runnable {
             : SourcePartitionValidator.MatchingStrategy.TOPIC;
     this.topicCheckingEnabled = config.getTopicCheckingEnabled();
     this.routers = this.validateTransformations(config.transformations());
+    this.connectorName = config.getName();
   }
 
   private List<Transformation<SourceRecord>> validateTransformations(
@@ -302,6 +304,9 @@ class KafkaMonitor implements Runnable {
 
     // Sort the result for order-independent comparison
     result.sort(Comparator.comparing(tp -> tp.topic() + tp.partition()));
+    if (connectorName != null && result != null && ConnectorPartitionsResource.getConnectorPartitionMap() != null) {
+      ConnectorPartitionsResource.updateConnectorPartitionMap(connectorName, result.size());
+    }
     return result;
   }
 
@@ -373,6 +378,9 @@ class KafkaMonitor implements Runnable {
     shutDownLatch.countDown();
     sourceConsumer.wakeup();
     destinationConsumer.wakeup();
+    if (connectorName != null && ConnectorPartitionsResource.getConnectorPartitionMap()!=null) {
+      ConnectorPartitionsResource.removeConnector(connectorName);
+    }
     synchronized (sourceConsumer) {
       sourceConsumer.close();
     }
